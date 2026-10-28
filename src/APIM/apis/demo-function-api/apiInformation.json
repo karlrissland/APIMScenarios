@@ -1,0 +1,9 @@
+{
+  "properties": {
+    "displayName": "Demo Function API",
+    "path": "function-demo",
+    "apiRevision": "1",
+    "protocols": ["https"],
+    "subscriptionRequired": true
+  }
+}

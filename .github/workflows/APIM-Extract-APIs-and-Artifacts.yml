@@ -1,10 +1,3 @@
-#####################################################################################################
-# NOTE: The publisher keys off of environment variablesto change the behavior of the publish process.
-#       * CONFIGURATION_YAML_PATH - if exists, will use config file to select APIs to extract
-#
-#       More details here; https://github.com/Azure/apiops/wiki/Configuration#configuration-providers
-#####################################################################################################
-
 name: APIM - Extract APIs and Artifacts
 
 on:
@@ -21,11 +14,6 @@ on:
         required: false
         type: boolean
         default: false
-      API_SPECIFICATION_FORMAT:
-        description: 'API Specification Format'
-        required: true
-        type: string
-        default: 'OpenAPIV3Yaml'
 
   workflow_dispatch:
     inputs:
@@ -38,104 +26,68 @@ on:
         required: false
         type: boolean
         default: false
-      API_SPECIFICATION_FORMAT:
-        description: 'API Specification Format'     
-        required: true
-        type: choice
-        options:
-        - OpenAPIV3Yaml 
-        - OpenAPIV3Json
-        - OpenAPIV2Yaml
-        - OpenAPIV2Json
 
 permissions:
-  id-token: write
   contents: write
   pull-requests: write
-
-env:
-  apiops_release_version: v4.1.2
-  RUNNER_DEBUG: 1
 
 jobs:
   APIM-extract-apis:
     runs-on: ubuntu-latest
     environment: ${{inputs.environment}}
-    #if: ${{ inputs.environment != 'dev'}}  #### Don't want to inadvertantly deploy back to dev as it is our starting point, but may want to override in future ###
     env:
-      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       AZURE_RESOURCE_GROUP_NAME: ${{ vars.AZURE_RESOURCE_GROUP_NAME }}
       API_MANAGEMENT_SERVICE_NAME: ${{ vars.API_MANAGEMENT_SERVICE_NAME }}
       API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH: ${{ GITHUB.WORKSPACE }}/src/APIM  # change this to the artifacts folder
-      API_SPECIFICATION_FORMAT: ${{inputs.API_SPECIFICATION_FORMAT}} 
+      APIM_FILTER_PATH: ${{ vars.APIM_FILTER_PATH }}
+      APIM_NO_TRANSITIVE: ${{ vars.APIM_NO_TRANSITIVE }}
       
     steps:
-      #############################################################################################
-      #NOTE: The extractor is looking for the existance of this environment variable to determine #
-      #      if it is going to extract a set of APIs as opposed to all the APIS.  If we are       #
-      #      going to extract all APIs, we simply don't create that environment variable.         #
-      #      This is where you add the absolute path to the configuration file.                   #
-      #############################################################################################
-      - run: |
-          if ("${{inputs.USE_CONFIG_FILE}}" -eq "true" )
-          {
-            "CONFIGURATION_YAML_PATH=${{ GITHUB.WORKSPACE }}/src/apim-extract-configuration.yaml" >> $env:GITHUB_ENV
-          }
-        shell: pwsh
-    
-      - run: |
-          Write-Host "Environment: ${{inputs.environment}}"
-          Write-Host "CONFIGURATION_YAML_PATH: ${{env.CONFIGURATION_YAML_PATH}}"
-          Write-Host "API_SPECIFICATION_FORMAT: ${{env.API_SPECIFICATION_FORMAT}}"
-          Write-Host "API_MANAGEMENT_SERVICE_NAME: ${{env.API_MANAGEMENT_SERVICE_NAME}}"
-          Write-Host "AZURE_RESOURCE_GROUP_NAME: ${{env.AZURE_RESOURCE_GROUP_NAME}}"
-          Write-Host "API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH: ${{env.API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH}}"
-        shell: pwsh
-        
-      - uses: actions/checkout@v3
-          
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install APIOps CLI
+        run: npm install --global @azure-tools/apiops-cli@1.0.5
+
+      - name: Sign in to Azure
+        uses: azure/login@v2
+        with:
+          creds: >-
+            {"clientId":${{ toJSON(secrets.AZURE_CLIENT_ID) }},"clientSecret":${{ toJSON(secrets.AZURE_CLIENT_SECRET) }},"tenantId":${{ toJSON(secrets.AZURE_TENANT_ID) }},"subscriptionId":${{ toJSON(secrets.AZURE_SUBSCRIPTION_ID) }}}
+
       - name: Run extractor
-        run: |
-          Set-StrictMode -Version Latest
-          $ErrorActionPreference = "Stop"
-          $VerbosePreference = "Continue"
-          $InformationPreference = "Continue"
-
-          Write-Information "Downloading extractor..."
-          $extractorFileName = "${{ runner.os }}" -like "*win*" ? "extractor.win-x64.exe" : "extractor.linux-x64.exe"
-          $uri = "https://github.com/Azure/apiops/releases/download/${{ env.apiops_release_version }}/$extractorFileName"
-          $destinationFilePath = Join-Path "${{ runner.temp }}" "extractor.exe"
-          Invoke-WebRequest -Uri "$uri" -OutFile "$destinationFilePath"
-          Write-Information "DestinationFilePath: $destinationFilePath"
-          Write-Information "Extractor downloaded..."
-          
-          if ("${{ runner.os }}" -like "*linux*")
-          {
-            Write-Information "Setting file permissions..."
-            & chmod +x "$destinationFilePath"
-            if ($LASTEXITCODE -ne 0) { throw "Setting file permissions failed."}
-            Write-Information "Setting file permissions complete..."
-          }
-
-          & "$destinationFilePath"              
-          if ($LASTEXITCODE -ne 0) { throw "Running extractor failed."}
-
-          Write-Information "Execution complete."
         shell: pwsh
+        env:
+          USE_CONFIG_FILE: ${{ inputs.USE_CONFIG_FILE }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $parameters = @{
+            ArtifactPath = $env:API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH
+            NoTransitive = $env:APIM_NO_TRANSITIVE -eq 'true'
+          }
+          if ($env:USE_CONFIG_FILE -eq 'true') {
+            $parameters.FilterPath = './src/apim-extract-configuration.yaml'
+          }
+          if ($env:APIM_FILTER_PATH) { $parameters.FilterPath = $env:APIM_FILTER_PATH }
+          & ./scripts/Extract-ApimArtifacts.ps1 @parameters
       
       - name: publish artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: artifacts-from-portal
-          path: ${{ GITHUB.WORKSPACE }}/${{ env.API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH }}    
+          path: ${{ env.API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH }}
+          if-no-files-found: error
           
       - name: Create artifacts pull request
-        uses: peter-evans/create-pull-request@v5     
+        uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          add-paths: src/APIM
+          branch: apim-extract-${{ inputs.environment }}
           commit-message: "updated extract from apim instance ${{ env.API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH }}"
           title: "${{ env.API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH }} - extract"
           body: >

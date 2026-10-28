@@ -1,0 +1,13 @@
+{
+  "properties": {
+    "title": "Demo Function",
+    "description": "Bound to the target Function by Publish-ApimArtifacts.ps1.",
+    "protocol": "http",
+    "url": "https://replace-before-publishing.invalid/api",
+    "credentials": {
+      "header": {
+        "x-functions-key": ["{{demo-function-key}}"]
+      }
+    }
+  }
+}

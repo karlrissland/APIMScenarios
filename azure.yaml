@@ -1,0 +1,39 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+name: apim-scenarios
+resourceGroup: ${AZURE_RESOURCE_GROUP_NAME}
+requiredVersions:
+  azd: '>= 1.36.0'
+infra:
+  provider: bicep
+  path: Infrastructure
+  module: main
+services:
+  function:
+    project: ./src/Function
+    language: python
+    host: function
+    resourceName: ${FUNCTION_SERVICE_NAME}
+    remoteBuild: true
+workflows:
+  up:
+    - azd: package --all
+    - azd: provision
+    - azd: deploy --all
+hooks:
+  preprovision:
+    shell: pwsh
+    run: |
+      $ErrorActionPreference = 'Stop'
+      if (-not (Get-Command apiops -ErrorAction SilentlyContinue)) {
+        throw 'Install APIOps CLI: npm install --global @azure-tools/apiops-cli@1.0.5'
+      }
+      if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
+        throw 'Install Azure CLI and sign in using az login for APIM publishing and Function key lookup.'
+      }
+    continueOnError: false
+    interactive: false
+  postdeploy:
+    shell: pwsh
+    run: ./scripts/Invoke-AzdPublish.ps1
+    continueOnError: false
+    interactive: false

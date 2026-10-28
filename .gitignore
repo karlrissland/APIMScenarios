@@ -1,0 +1,8 @@
+.azure/*
+!.azure/deployment-plan.md
+**/.venv/
+**/__pycache__/
+**/local.settings.json
+Infrastructure/*.json
+!Infrastructure/main.parameters.json
+.tools/

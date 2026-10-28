@@ -51,7 +51,10 @@ jobs:
         deploymentMode: Incremental 
         deploymentName: githubsha${{GITHUB.SHA}}                                   
         region: ${{vars.AZURE_REGION}}                                                            # Want this driven from an environment variable
-        parameters: 'environment=${{inputs.environment}} location=${{vars.AZURE_REGION}}'  # Can also specify a parameters file location.  Want these driven from environment variables
+        parameters: >-
+          environment=${{inputs.environment}} location=${{vars.AZURE_REGION}}
+          publisherName="${{vars.APIM_PUBLISHER_NAME}}" publisherEmail="${{vars.APIM_PUBLISHER_EMAIL}}"
+          apimSku="${{vars.APIM_SKU}}"
         failOnStdErr: false
 
     #Will need to update environment variables with this info

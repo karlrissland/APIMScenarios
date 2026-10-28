@@ -1,0 +1,25 @@
+openapi: 3.0.1
+info:
+  title: Demo Function API
+  version: '1.0'
+paths:
+  /hello:
+    get:
+      operationId: hello
+      parameters:
+        - name: name
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Greeting and target environment
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  environment:
+                    type: string

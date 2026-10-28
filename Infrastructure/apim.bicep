@@ -15,11 +15,10 @@ param publisherName string
 
 @description('The pricing tier of this API Management service')
 @allowed([
-  'Developer'
-  'Standard'
-  'Premium'
+  'BasicV2'
+  'PremiumV2'
 ])
-param sku string = 'Developer'
+param sku string
 
 @description('The instance size of this API Management service.')
 @allowed([
@@ -31,7 +30,7 @@ param skuCount int = 1
 @description('The name of the API Management service instance')
 var apiManagementServiceName = 'apiservice-${resourceSuffix}'
 
-resource apiManagementService 'Microsoft.ApiManagement/service@2021-08-01' = {
+resource apiManagementService 'Microsoft.ApiManagement/service@2025-09-01-preview' = {
   name: apiManagementServiceName
   location: location
   sku: {
@@ -41,6 +40,7 @@ resource apiManagementService 'Microsoft.ApiManagement/service@2021-08-01' = {
   properties: {
     publisherEmail: publisherEmail
     publisherName: publisherName
+    developerPortalStatus: 'Enabled'
   }
 }
 
